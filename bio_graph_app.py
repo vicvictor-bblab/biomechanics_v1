@@ -19,6 +19,10 @@ import json
 import os
 from scipy.integrate import cumulative_trapezoid
 
+from biograph.data_loader import load_multiple_files
+from biograph.preset_manager import PresetManager
+from biograph.annotations import AnnotationManager
+
 # --- Matplotlibの日本語フォント設定 ---
 try:
     if platform.system() == 'Windows':
@@ -420,14 +424,14 @@ class BioGraphApp:
         master.geometry("1000x800")
 
         self.db_path = os.path.join(os.getcwd(), "biograph_presets.db")
-        self.db_conn = None
-        self.init_database()
+        self.preset_mgr = PresetManager(self.db_path)
 
         self.df = None; self.sliced_df = None; self.sheet_names = []; self.column_names = []
         self.df_dict = {}; self.vline_configs = []; self.current_fig = None
         self.data_output_window = None
         self.plotted_lines = {}
         self.tooltip_annotation = None
+        self.annotation_mgr = AnnotationManager()
 
         self.aspect_ratios = {"デフォルト (6:4)": (6, 4), "4:3": (4, 3), "16:9": (16, 9), "1:1 (正方形)": (1, 1), "3:4 (縦長)": (3, 4)}
         self.default_figure_width_inches = 6
@@ -513,6 +517,10 @@ class BioGraphApp:
         self.save_preset_button.pack(side=tk.LEFT, padx=5, pady=5)
         self.delete_preset_button = ttk.Button(preset_frame, text="選択中プリセットを削除", command=self.delete_selected_preset)
         self.delete_preset_button.pack(side=tk.LEFT, padx=5, pady=5)
+        self.export_preset_button = ttk.Button(preset_frame, text="エクスポート", command=self.export_preset_to_file)
+        self.export_preset_button.pack(side=tk.LEFT, padx=5, pady=5)
+        self.import_preset_button = ttk.Button(preset_frame, text="インポート", command=self.import_preset_from_file)
+        self.import_preset_button.pack(side=tk.LEFT, padx=5, pady=5)
 
 
         file_frame = ttk.LabelFrame(self.scrollable_controls_frame, text="1. ファイル選択")
@@ -739,14 +747,10 @@ class BioGraphApp:
         self._about_window = AboutAppWindow(self.master)
         self.master.wait_window(self._about_window)
 
-    def init_database(self):
-        self.db_conn = sqlite3.connect(self.db_path)
-        cursor = self.db_conn.cursor()
-        cursor.execute("CREATE TABLE IF NOT EXISTS presets (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL, settings TEXT NOT NULL)")
-        self.db_conn.commit()
 
     def on_app_close(self):
-        if self.db_conn: self.db_conn.close()
+        if self.preset_mgr and self.preset_mgr.conn:
+            self.preset_mgr.conn.close()
         if self.data_output_window and self.data_output_window.winfo_exists():
             self.data_output_window.destroy()
         if hasattr(self, '_about_window') and self._about_window and self._about_window.winfo_exists():
@@ -754,10 +758,7 @@ class BioGraphApp:
         self.master.destroy()
 
     def load_presets_to_combobox(self):
-        if not self.db_conn: return
-        cursor = self.db_conn.cursor()
-        cursor.execute("SELECT name FROM presets ORDER BY name")
-        presets = [row[0] for row in cursor.fetchall()]
+        presets = self.preset_mgr.list_presets()
         self.preset_combobox['values'] = presets
         self.preset_var.set("")
         if not presets: self.preset_combobox['values'] = []
@@ -784,46 +785,30 @@ class BioGraphApp:
     def save_current_settings_as_preset(self):
         preset_name = simpledialog.askstring("プリセット名", "プリセット名を入力してください:", parent=self.master)
         if not preset_name: return
-        settings_dict = self.collect_current_settings(); settings_json = json.dumps(settings_dict)
-        if not self.db_conn: self.init_database()
-        cursor = self.db_conn.cursor()
+        settings_dict = self.collect_current_settings()
+        description = simpledialog.askstring("説明", "プリセットの説明を入力してください (任意):", parent=self.master)
+        tags = simpledialog.askstring("タグ", "カンマ区切りのタグ (任意):", parent=self.master)
         try:
-            cursor.execute("SELECT id FROM presets WHERE name = ?", (preset_name,))
-            existing = cursor.fetchone()
-            if existing:
-                if not messagebox.askyesno("上書き確認", f"プリセット '{preset_name}' は既に存在します。上書きしますか？", parent=self.master): return
-                cursor.execute("UPDATE presets SET settings = ? WHERE name = ?", (settings_json, preset_name))
-            else:
-                cursor.execute("INSERT INTO presets (name, settings) VALUES (?, ?)", (preset_name, settings_json))
-            self.db_conn.commit()
+            self.preset_mgr.save_preset(preset_name, description or "", tags or "", settings_dict)
             messagebox.showinfo("成功", f"プリセット '{preset_name}' を保存しました。", parent=self.master)
             self.load_presets_to_combobox(); self.preset_var.set(preset_name)
-        except sqlite3.Error as e: messagebox.showerror("データベースエラー", f"プリセットの保存に失敗しました: {e}", parent=self.master)
+        except sqlite3.Error as e:
+            messagebox.showerror("データベースエラー", f"プリセットの保存に失敗しました: {e}", parent=self.master)
 
     def load_settings_from_preset(self, event=None):
         preset_name = self.preset_var.get()
         if not preset_name: return
-
         self._applying_preset = True
-        if not self.db_conn: self.init_database()
-        cursor = self.db_conn.cursor()
-        cursor.execute("SELECT settings FROM presets WHERE name = ?", (preset_name,))
-        result = cursor.fetchone()
-
-        if result:
-            settings_json = result[0]
-            try:
-                self.loaded_preset_settings = json.loads(settings_json)
+        try:
+            self.loaded_preset_settings = self.preset_mgr.load_preset(preset_name)
+            if self.loaded_preset_settings is not None:
                 self.apply_settings_from_loaded_preset()
                 messagebox.showinfo("成功", f"プリセット '{preset_name}' を読み込みました。\nファイルと軸を再選択してください。", parent=self.master)
-            except json.JSONDecodeError:
-                messagebox.showerror("エラー", "プリセットデータの読み込みに失敗しました (JSON形式エラー)。", parent=self.master)
+            else:
+                messagebox.showerror("エラー", f"プリセット '{preset_name}' が見つかりません。", parent=self.master)
                 self.loaded_preset_settings = None
-            except Exception as e:
-                messagebox.showerror("エラー", f"プリセットの適用中にエラーが発生しました: {e}", parent=self.master)
-                self.loaded_preset_settings = None
-        else:
-            messagebox.showerror("エラー", f"プリセット '{preset_name}' が見つかりません。", parent=self.master)
+        except Exception as e:
+            messagebox.showerror("エラー", f"プリセットの読み込み中にエラーが発生しました: {e}", parent=self.master)
             self.loaded_preset_settings = None
         self._applying_preset = False
 
@@ -925,29 +910,55 @@ class BioGraphApp:
         preset_name = self.preset_var.get()
         if not preset_name: messagebox.showwarning("未選択", "削除するプリセットが選択されていません。", parent=self.master); return
         if messagebox.askyesno("削除確認", f"プリセット '{preset_name}' を本当に削除しますか？\nこの操作は元に戻せません。", parent=self.master):
-            if not self.db_conn: self.init_database()
-            cursor = self.db_conn.cursor()
             try:
-                cursor.execute("DELETE FROM presets WHERE name = ?", (preset_name,))
-                self.db_conn.commit()
-                if cursor.rowcount > 0: messagebox.showinfo("成功", f"プリセット '{preset_name}' を削除しました。", parent=self.master)
-                else: messagebox.showwarning("失敗", f"プリセット '{preset_name}' の削除に失敗したか、見つかりませんでした。", parent=self.master)
+                self.preset_mgr.delete_preset(preset_name)
+                messagebox.showinfo("成功", f"プリセット '{preset_name}' を削除しました。", parent=self.master)
                 self.load_presets_to_combobox(); self.preset_var.set("")
-            except sqlite3.Error as e: messagebox.showerror("データベースエラー", f"プリセットの削除に失敗しました: {e}", parent=self.master)
+            except sqlite3.Error as e:
+                messagebox.showerror("データベースエラー", f"プリセットの削除に失敗しました: {e}", parent=self.master)
+
+    def export_preset_to_file(self):
+        preset_name = self.preset_var.get()
+        if not preset_name:
+            messagebox.showwarning("未選択", "エクスポートするプリセットを選択してください。", parent=self.master)
+            return
+        file_path = filedialog.asksaveasfilename(defaultextension="json", filetypes=(("JSON","*.json"),))
+        if not file_path:
+            return
+        try:
+            self.preset_mgr.export_preset(preset_name, file_path)
+            messagebox.showinfo("成功", f"プリセットを {file_path} に保存しました。", parent=self.master)
+        except Exception as e:
+            messagebox.showerror("エラー", f"エクスポートに失敗しました: {e}", parent=self.master)
+
+    def import_preset_from_file(self):
+        file_path = filedialog.askopenfilename(filetypes=(("JSON","*.json"),))
+        if not file_path:
+            return
+        try:
+            self.preset_mgr.import_preset(file_path)
+            messagebox.showinfo("成功", "プリセットをインポートしました。", parent=self.master)
+            self.load_presets_to_combobox()
+        except Exception as e:
+            messagebox.showerror("エラー", f"インポートに失敗しました: {e}", parent=self.master)
 
     def load_excel_file_interactive(self):
-        filepath = filedialog.askopenfilename(title="Excelファイルを選択", filetypes=(("Excelファイル", "*.xlsx *.xls"), ("すべてのファイル", "*.*")))
-        if filepath: self.load_excel_file(filepath=filepath)
+        filepaths = filedialog.askopenfilenames(title="ファイルを選択", filetypes=(("Excel/CSV","*.xlsx *.xls *.csv"), ("すべてのファイル","*.*")))
+        if filepaths:
+            self.load_excel_file(filepaths=filepaths)
 
-    def load_excel_file(self, filepath=None):
-        if filepath is None: return
+    def load_excel_file(self, filepath=None, filepaths=None):
+        if not filepath and not filepaths:
+            return
+        if filepaths is None and filepath:
+            filepaths = [filepath]
         if not self._applying_preset:
             self.loaded_preset_settings = None
 
         try:
-            xls = pd.ExcelFile(filepath)
-            self.sheet_names = xls.sheet_names; self.df_dict = {name: xls.parse(name) for name in self.sheet_names}
-            self.file_path_label.config(text=filepath)
+            self.df_dict = load_multiple_files(filepaths)
+            self.sheet_names = list(self.df_dict.keys())
+            self.file_path_label.config(text=', '.join(self.sheet_names))
             self.sheet_dropdown.config(state="readonly"); self.sheet_var.set("")
             self.x_axis_listbox.config(state="disabled"); self.x_axis_var.set("")
             self.y_axis_listbox.config(state="disabled"); self.y_axis_listbox.delete(0, tk.END)
@@ -973,7 +984,7 @@ class BioGraphApp:
                 self.sheet_dropdown.config(state="disabled")
 
         except Exception as e:
-            messagebox.showerror("エラー", f"ファイルの読み込みに失敗しました ({filepath}):\n{e}", parent=self.master)
+            messagebox.showerror("エラー", f"ファイルの読み込みに失敗しました:\n{e}", parent=self.master)
             self.file_path_label.config(text="ファイルが選択されていません")
             self.current_fig = None; self.sliced_df = None
             self.reset_display_settings_inputs()
@@ -1338,7 +1349,9 @@ class BioGraphApp:
                 ax.grid(True, color=self.grid_color_var.get(), linestyle=grid_linestyle_str, linewidth=self.grid_linewidth_var.get())
             else:
                 ax.grid(False)
-            
+
+            self.annotation_mgr.draw(ax, fontsize=base_fontsize)
+
             self.current_fig.tight_layout()
 
             self.canvas_widget = FigureCanvasTkAgg(self.current_fig, master=self.graph_display_frame)
@@ -1352,6 +1365,7 @@ class BioGraphApp:
             self.current_fig.canvas.mpl_connect('motion_notify_event', self.on_mouse_motion)
             self.current_fig.canvas.mpl_connect('pick_event', self.on_legend_pick)
             self.current_fig.canvas.mpl_connect('scroll_event', self.on_mouse_scroll)
+            self.current_fig.canvas.mpl_connect('button_press_event', self.on_mouse_click)
 
 
             self.save_graph_button.config(state="normal"); self.create_table_button.config(state="normal")
@@ -1427,6 +1441,15 @@ class BioGraphApp:
             else:
                 leg_artist.set_alpha(0.2)
             if self.canvas_widget: self.canvas_widget.draw_idle()
+
+    def on_mouse_click(self, event):
+        if event.dblclick and event.inaxes and self.current_fig:
+            ax = self.current_fig.gca()
+            text = simpledialog.askstring("注釈", "注釈テキストを入力してください:", parent=self.master)
+            if text:
+                self.annotation_mgr.add_annotation(event.xdata, event.ydata, text)
+                self.annotation_mgr.draw(ax, fontsize=self.global_fontsize_var.get())
+                self.canvas_widget.draw_idle()
 
 
     def save_graph(self):
