@@ -6,7 +6,11 @@ This repository contains a Tkinter-based GUI application for plotting and analyz
 
 1. Install requirements:
    ```bash
-   pip install pandas matplotlib scipy
+   pip install pandas matplotlib scipy numpy
+   ```
+   If you want to open Excel files, install `openpyxl` as well:
+   ```bash
+   pip install openpyxl
    ```
 2. Run the application:
    ```bash
