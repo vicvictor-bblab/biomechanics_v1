@@ -24,3 +24,7 @@ Use the "CSVに保存..." button in the data table window to export processed da
 Presets now store the selected X/Y columns in addition to display settings so that you can easily reapply axis selections.
 
 The original Jupyter notebook is provided as `アオキ編集中-完成.ipynb`. It was converted to the standalone script `bio_graph_app.py` for easier execution.
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
