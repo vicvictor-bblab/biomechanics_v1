@@ -197,6 +197,9 @@ class DataOutputWindow(tk.Toplevel):
         copy_button = ttk.Button(parent_frame, text="テーブル内容をコピー", command=lambda: self.copy_treeview_to_clipboard(self.sliced_data_tree))
         copy_button.pack(pady=5)
 
+        export_button = ttk.Button(parent_frame, text="CSVに保存...", command=self.export_sliced_data_to_csv)
+        export_button.pack(pady=5)
+
     def copy_treeview_to_clipboard(self, treeview):
         try:
             header = '\t'.join(treeview['columns']) + '\n'
@@ -212,6 +215,25 @@ class DataOutputWindow(tk.Toplevel):
             messagebox.showinfo("コピー完了", "テーブルの内容をクリップボードにコピーしました。", parent=self)
         except Exception as e:
             messagebox.showerror("コピー失敗", f"クリップボードへのコピー中にエラーが発生しました:\n{e}", parent=self)
+
+    def export_sliced_data_to_csv(self):
+        """Export the displayed sliced data table to a CSV file."""
+        if self.app.sliced_df is None or self.app.sliced_df.empty:
+            messagebox.showwarning("データなし", "書き出すスライスデータがありません。", parent=self)
+            return
+
+        file_path = filedialog.asksaveasfilename(
+            title="スライスデータをCSV保存",
+            defaultextension=".csv",
+            filetypes=(("CSVファイル", "*.csv"), ("すべてのファイル", "*.*"))
+        )
+        if not file_path:
+            return
+        try:
+            self.app.sliced_df.to_csv(file_path, index=False)
+            messagebox.showinfo("成功", f"スライスデータを {file_path} に保存しました。", parent=self)
+        except Exception as e:
+            messagebox.showerror("保存失敗", f"CSV保存中にエラーが発生しました:\n{e}", parent=self)
 
 
     def create_marker_values_table(self, parent_frame):
@@ -418,6 +440,8 @@ class BioGraphApp:
         self.master = master
         master.title("バイオメカニクス グラフ表示アプリ")
         master.geometry("1000x800")
+
+        self.create_menu(master)
 
         self.db_path = os.path.join(os.getcwd(), "biograph_presets.db")
         self.db_conn = None
@@ -739,6 +763,14 @@ class BioGraphApp:
         self._about_window = AboutAppWindow(self.master)
         self.master.wait_window(self._about_window)
 
+    def create_menu(self, master):
+        """Create the menubar with a File→終了 option."""
+        menubar = tk.Menu(master)
+        file_menu = tk.Menu(menubar, tearoff=0)
+        file_menu.add_command(label="終了", command=self.on_app_close)
+        menubar.add_cascade(label="ファイル", menu=file_menu)
+        master.config(menu=menubar)
+
     def init_database(self):
         self.db_conn = sqlite3.connect(self.db_path)
         cursor = self.db_conn.cursor()
@@ -746,7 +778,10 @@ class BioGraphApp:
         self.db_conn.commit()
 
     def on_app_close(self):
-        if self.db_conn: self.db_conn.close()
+        if not messagebox.askokcancel("終了確認", "アプリを終了しますか？", parent=self.master):
+            return
+        if self.db_conn:
+            self.db_conn.close()
         if self.data_output_window and self.data_output_window.winfo_exists():
             self.data_output_window.destroy()
         if hasattr(self, '_about_window') and self._about_window and self._about_window.winfo_exists():
@@ -769,6 +804,8 @@ class BioGraphApp:
             'graph_title': self.graph_title_var.get(),
             'x_axis_label': self.x_axis_label_var.get(),
             'y_axis_label': self.y_axis_label_var.get(),
+            'x_axis_column': self.x_axis_var.get(),
+            'y_axis_columns': [self.y_axis_listbox.get(i) for i in self.y_axis_listbox.curselection()],
             'aspect_ratio': self.aspect_ratio_var.get(),
             'legend_location': self.legend_loc_var.get(),
             'plot_bg_color': self.plot_bg_color_var.get(),
@@ -1022,6 +1059,7 @@ class BioGraphApp:
 
             self.clear_legend_entries_ui()
             self.apply_preset_legend_labels_if_needed()
+            self.apply_preset_axis_selections_if_needed()
 
         else:
             messagebox.showwarning("警告", f"シート '{selected_sheet_name}' に列がありません。", parent=self.master)
@@ -1154,6 +1192,29 @@ class BioGraphApp:
             messagebox.showwarning("プリセット凡例警告",
                                    f"プリセットには以下の列の凡例名設定がありましたが、現在のシートには存在しません:\n{', '.join(missing_cols_in_current_sheet)}\nこれらの凡例設定は無視されます。",
                                    parent=self.master)
+
+    def apply_preset_axis_selections_if_needed(self):
+        """Apply axis selections saved in a preset if the columns exist."""
+        if not self.loaded_preset_settings:
+            return
+
+        preset_x = self.loaded_preset_settings.get('x_axis_column')
+        preset_y_cols = self.loaded_preset_settings.get('y_axis_columns', [])
+
+        self._applying_preset = True
+        if preset_x in self.column_names:
+            self.x_axis_var.set(preset_x)
+            self.on_x_axis_selected(None)
+        valid_indices = []
+        for col in preset_y_cols:
+            if col in self.column_names:
+                valid_indices.append(self.column_names.index(col))
+        if valid_indices:
+            self.y_axis_listbox.selection_clear(0, tk.END)
+            for idx in valid_indices:
+                self.y_axis_listbox.selection_set(idx)
+            self.on_y_axis_selected(None)
+        self._applying_preset = False
 
 
     def on_aspect_ratio_selected(self, event): self.trigger_redraw_if_possible()
