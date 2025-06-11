@@ -12,7 +12,12 @@ This repository contains a Tkinter-based GUI application for plotting and analyz
    ```bash
    pip install openpyxl
    ```
-2. Run the application:
+2. Run the menu script to choose whether to integrate files or start the GUI:
+   ```bash
+   python main_menu.py
+   ```
+
+   You can still launch the GUI directly if desired:
    ```bash
    python bio_graph_app.py
    ```
