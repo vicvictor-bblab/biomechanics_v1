@@ -41,6 +41,7 @@ except Exception as e:
 
 class AboutAppWindow(tk.Toplevel):
     def __init__(self, master):
+        """Initialize the about window dialog."""
         super().__init__(master)
         self.title("アプリケーション情報")
         self.geometry("600x450") 
@@ -66,6 +67,7 @@ class AboutAppWindow(tk.Toplevel):
         close_button.pack(pady=10)
 
     def create_info_tab(self, parent_frame):
+        """Populate the information tab with version and author data."""
         app_name_label = ttk.Label(parent_frame, text="バイオメカニクス グラフ表示アプリ", font=("TkDefaultFont", 14, "bold"))
         app_name_label.pack(pady=10)
         
@@ -77,6 +79,7 @@ class AboutAppWindow(tk.Toplevel):
         author_label.pack(pady=10)
         
     def create_features_tab(self, parent_frame):
+        """Populate the features tab describing available functionality."""
         features_text_frame = ttk.Frame(parent_frame)
         features_text_frame.pack(expand=True, fill="both", padx=5, pady=5)
 
@@ -120,6 +123,7 @@ class AboutAppWindow(tk.Toplevel):
         vsb.pack(side="right", fill="y")
 
     def create_history_tab(self, parent_frame):
+        """Populate the history tab with revision notes."""
         history_text_frame = ttk.Frame(parent_frame)
         history_text_frame.pack(expand=True, fill="both", padx=5, pady=5)
 
@@ -140,6 +144,7 @@ class AboutAppWindow(tk.Toplevel):
 
 class DataOutputWindow(tk.Toplevel):
     def __init__(self, master, app_instance):
+        """Create a window for displaying sliced data and related tables."""
         super().__init__(master)
         self.title("データテーブル出力")
         self.geometry("800x600")
@@ -165,9 +170,11 @@ class DataOutputWindow(tk.Toplevel):
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
     def on_close(self):
+        """Close the window and clear the reference from the app."""
         self.app.data_output_window = None; self.destroy()
 
     def create_sliced_data_table(self, parent_frame):
+        """Show the current sliced dataframe in a Treeview table."""
         table_frame = ttk.Frame(parent_frame)
         table_frame.pack(expand=True, fill="both", padx=5, pady=5)
 
@@ -200,6 +207,7 @@ class DataOutputWindow(tk.Toplevel):
         export_button.pack(pady=5)
 
     def copy_treeview_to_clipboard(self, treeview):
+        """Copy all rows of the given Treeview widget to the clipboard."""
         try:
             header = '\t'.join(treeview['columns']) + '\n'
             items_data = []
@@ -236,6 +244,7 @@ class DataOutputWindow(tk.Toplevel):
 
 
     def create_marker_values_table(self, parent_frame):
+        """Create a table listing marker values at each event line."""
         table_frame = ttk.Frame(parent_frame)
         table_frame.pack(expand=True, fill="both", padx=5, pady=5)
         columns = ["マーカー名", "X座標"]
@@ -257,6 +266,7 @@ class DataOutputWindow(tk.Toplevel):
         self.populate_marker_values_table()
 
     def populate_marker_values_table(self):
+        """Fill the marker table using the current vertical line settings."""
         for item in self.marker_tree.get_children():
             self.marker_tree.delete(item)
 
@@ -321,6 +331,7 @@ class DataOutputWindow(tk.Toplevel):
 
 
     def create_statistics_table_ui(self, parent_frame):
+        """Build the statistics table and selection checkboxes."""
         checkbox_frame = ttk.Frame(parent_frame)
         checkbox_frame.pack(pady=5, padx=5, fill="x")
         self.stat_vars = {} 
@@ -349,6 +360,7 @@ class DataOutputWindow(tk.Toplevel):
 
 
     def populate_statistics_table(self):
+        """Populate the statistics table with calculated metrics."""
         for item in self.stats_tree.get_children():
             self.stats_tree.delete(item)
 
@@ -436,6 +448,7 @@ class DataOutputWindow(tk.Toplevel):
 
 class BioGraphApp:
     def __init__(self, master):
+        """Initialize the main application window and widgets."""
         self.master = master
         master.title("バイオメカニクス グラフ表示アプリ")
         master.geometry("1000x800")
@@ -742,7 +755,8 @@ class BioGraphApp:
 
 
     def on_grid_visibility_change(self):
-        if hasattr(self, 'grid_color_combo'): 
+        """Update related widgets when the grid visibility checkbox is toggled."""
+        if hasattr(self, 'grid_color_combo'):
             is_visible = self.grid_visible_var.get()
             state = tk.NORMAL if is_visible else tk.DISABLED
             # grid_visible_checkbox が有効な場合のみ、従属するウィジェットの状態を変更
@@ -759,6 +773,7 @@ class BioGraphApp:
 
 
     def show_about_window(self):
+        """Display the "About" dialog and wait for it to close."""
         self._about_window = AboutAppWindow(self.master)
         self.master.wait_window(self._about_window)
 
@@ -771,12 +786,14 @@ class BioGraphApp:
         master.config(menu=menubar)
 
     def init_database(self):
+        """Create the SQLite database for storing presets if needed."""
         self.db_conn = sqlite3.connect(self.db_path)
         cursor = self.db_conn.cursor()
         cursor.execute("CREATE TABLE IF NOT EXISTS presets (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL, settings TEXT NOT NULL)")
         self.db_conn.commit()
 
     def on_app_close(self):
+        """Handle cleanup and confirm before closing the application."""
         if not messagebox.askokcancel("終了確認", "アプリを終了しますか？", parent=self.master):
             return
         if self.db_conn:
@@ -788,6 +805,7 @@ class BioGraphApp:
         self.master.destroy()
 
     def load_presets_to_combobox(self):
+        """Load preset names from the database into the combobox."""
         if not self.db_conn: return
         cursor = self.db_conn.cursor()
         cursor.execute("SELECT name FROM presets ORDER BY name")
@@ -797,6 +815,7 @@ class BioGraphApp:
         if not presets: self.preset_combobox['values'] = []
 
     def collect_current_settings(self):
+        """Return a dictionary capturing all current UI selections."""
         settings = {
             'legend_labels': {orig_name: var.get() for orig_name, var in self.legend_label_vars.items()},
             'vline_markers': [{'name': item['name_var'].get(), 'color': item['color_var'].get(), 'linewidth': item['linewidth_var'].get()} for item in self.vline_configs],
@@ -818,6 +837,7 @@ class BioGraphApp:
         return settings
 
     def save_current_settings_as_preset(self):
+        """Prompt for a name and persist the current settings."""
         preset_name = simpledialog.askstring("プリセット名", "プリセット名を入力してください:", parent=self.master)
         if not preset_name: return
         settings_dict = self.collect_current_settings(); settings_json = json.dumps(settings_dict)
@@ -837,6 +857,7 @@ class BioGraphApp:
         except sqlite3.Error as e: messagebox.showerror("データベースエラー", f"プリセットの保存に失敗しました: {e}", parent=self.master)
 
     def load_settings_from_preset(self, event=None):
+        """Load settings from the currently selected preset."""
         preset_name = self.preset_var.get()
         if not preset_name: return
 
@@ -865,6 +886,7 @@ class BioGraphApp:
 
 
     def apply_settings_from_loaded_preset(self):
+        """Apply settings previously loaded from a preset dictionary."""
         if not self.loaded_preset_settings:
             return
 
@@ -958,6 +980,7 @@ class BioGraphApp:
 
 
     def delete_selected_preset(self):
+        """Remove the currently selected preset from the database."""
         preset_name = self.preset_var.get()
         if not preset_name: messagebox.showwarning("未選択", "削除するプリセットが選択されていません。", parent=self.master); return
         if messagebox.askyesno("削除確認", f"プリセット '{preset_name}' を本当に削除しますか？\nこの操作は元に戻せません。", parent=self.master):
@@ -972,10 +995,12 @@ class BioGraphApp:
             except sqlite3.Error as e: messagebox.showerror("データベースエラー", f"プリセットの削除に失敗しました: {e}", parent=self.master)
 
     def load_excel_file_interactive(self):
+        """Prompt the user to select an Excel file and then load it."""
         filepath = filedialog.askopenfilename(title="Excelファイルを選択", filetypes=(("Excelファイル", "*.xlsx *.xls"), ("すべてのファイル", "*.*")))
         if filepath: self.load_excel_file(filepath=filepath)
 
     def load_excel_file(self, filepath=None):
+        """Load an Excel workbook and initialize sheet and column options."""
         if filepath is None: return
         if not self._applying_preset:
             self.loaded_preset_settings = None
@@ -1019,9 +1044,11 @@ class BioGraphApp:
             self.loaded_preset_settings = None
 
     def update_sheet_dropdown_options(self):
+        """Refresh the sheet list based on the loaded Excel file."""
         self.sheet_dropdown['values'] = self.sheet_names if self.sheet_names else []
 
     def on_sheet_selected(self, event):
+        """Handle sheet selection and refresh column list boxes."""
         selected_sheet_name = self.sheet_var.get()
         if not self._applying_preset:
              self.loaded_preset_settings = None
@@ -1071,6 +1098,7 @@ class BioGraphApp:
             self.current_fig = None; self.sliced_df = None
 
     def on_x_axis_selected(self, event):
+        """Update the UI when a new X-axis column is chosen."""
         selected_x = self.x_axis_var.get()
         if selected_x:
             if not self._applying_preset: self.x_axis_label_var.set(selected_x) # プリセット適用中でなければラベルを更新
@@ -1118,6 +1146,7 @@ class BioGraphApp:
             if not self._applying_preset: self.clear_legend_entries_ui()
 
     def on_y_axis_selected(self, event=None):
+        """Handle selection changes for Y-axis columns."""
         if not self._applying_preset: self.update_legend_entries_ui()
 
         if self.x_axis_var.get() and self.y_axis_listbox.curselection():
@@ -1142,6 +1171,7 @@ class BioGraphApp:
             self.create_table_button.config(state="disabled")
 
     def update_legend_entries_ui(self):
+        """Regenerate legend text entry fields for the selected Y columns."""
         for widget in list(self.y_legend_entries_frame.winfo_children())[1:]:
             widget.destroy()
 
@@ -1172,6 +1202,7 @@ class BioGraphApp:
         self.legend_label_vars = new_legend_vars
 
     def apply_preset_legend_labels_if_needed(self):
+        """Set legend labels from a loaded preset when possible."""
         if not self.loaded_preset_settings or 'legend_labels' not in self.loaded_preset_settings:
             return
 
@@ -1216,25 +1247,36 @@ class BioGraphApp:
         self._applying_preset = False
 
 
-    def on_aspect_ratio_selected(self, event): self.trigger_redraw_if_possible()
-    def on_legend_loc_selected(self, event): self.trigger_redraw_if_possible()
+    def on_aspect_ratio_selected(self, event):
+        """Redraw the plot when the aspect ratio selection changes."""
+        self.trigger_redraw_if_possible()
+
+    def on_legend_loc_selected(self, event):
+        """Redraw the plot when the legend location option changes."""
+        self.trigger_redraw_if_possible()
+
     def trigger_redraw_if_possible(self):
+        """Redraw the graph if X and Y selections are available."""
         if self.x_axis_var.get() and self.y_axis_listbox.curselection() and self.df is not None: self.draw_graph()
     def update_default_graph_title(self):
+        """Set a basic graph title based on selected axes."""
         selected_x = self.x_axis_var.get(); selected_y_indices = self.y_axis_listbox.curselection()
         if selected_x and selected_y_indices:
             selected_y_cols = [self.y_axis_listbox.get(i) for i in selected_y_indices]
             title = f"{', '.join(selected_y_cols)} vs {selected_x}"; self.graph_title_var.set(title)
     def update_xaxis_options(self):
+        """Update the X-axis selection list based on column names."""
         self.x_axis_listbox['values'] = self.column_names if self.column_names else []
 
     def get_figure_size(self):
+        """Return a (width, height) tuple based on the aspect ratio setting."""
         selected_ratio_name = self.aspect_ratio_var.get()
         ratio_w, ratio_h = self.aspect_ratios.get(selected_ratio_name, self.aspect_ratios[list(self.aspect_ratios.keys())[0]])
         fig_width = self.default_figure_width_inches; fig_height = fig_width * (ratio_h / ratio_w)
         return (fig_width, fig_height)
 
     def on_mouse_scroll(self, event):
+        """Zoom the plot in or out with the mouse wheel."""
         if event.inaxes and self.current_fig:
             ax = self.current_fig.gca()
             cur_xlim = ax.get_xlim()
@@ -1266,6 +1308,7 @@ class BioGraphApp:
             self.canvas_widget.draw_idle()
 
     def draw_graph(self):
+        """Draw the graph using the current selections and settings."""
         selected_x_column = self.x_axis_var.get()
         selected_y_indices = self.y_axis_listbox.curselection()
         if not selected_x_column: messagebox.showwarning("警告", "X軸データ列を選択してください.", parent=self.master); return
@@ -1419,6 +1462,7 @@ class BioGraphApp:
         except Exception as e: messagebox.showerror("エラー", f"グラフの描画中にエラーが発生しました:\n{e}", parent=self.master); self.current_fig=None; self.sliced_df=None; self.save_graph_button.config(state="disabled"); self.create_table_button.config(state="disabled")
 
     def on_mouse_motion(self, event):
+        """Show a tooltip with values when the cursor hovers near data."""
         if self.current_fig and event.inaxes == self.current_fig.gca():
             ax = self.current_fig.gca()
             if self.tooltip_annotation:
@@ -1458,6 +1502,7 @@ class BioGraphApp:
 
 
     def on_legend_pick(self, event):
+        """Toggle line visibility when its legend entry is clicked."""
         leg_artist = event.artist
         if not self.current_fig: return
         ax = self.current_fig.gca()
@@ -1490,6 +1535,7 @@ class BioGraphApp:
 
 
     def save_graph(self):
+        """Save the currently drawn figure to an image file."""
         if self.current_fig is None: messagebox.showwarning("警告", "保存するグラフがありません。", parent=self.master); return
         file_path = filedialog.asksaveasfilename(title="グラフを保存", defaultextension=".png", filetypes=(("PNGファイル", "*.png"), ("PDFファイル", "*.pdf"), ("すべてのファイル", "*.*")))
         if not file_path: return
@@ -1499,6 +1545,7 @@ class BioGraphApp:
         except Exception as e: messagebox.showerror("エラー", f"グラフの保存に失敗しました:\n{e}", parent=self.master)
 
     def show_data_table_window(self):
+        """Open the data output window showing slice and marker tables."""
         if self.data_output_window is None or not self.data_output_window.winfo_exists():
             if self.sliced_df is not None and not self.sliced_df.empty:
                 self.data_output_window = DataOutputWindow(self.master, self)
@@ -1509,10 +1556,12 @@ class BioGraphApp:
             self.data_output_window.lift()
 
     def validate_numeric_input(self, P):
+        """Entry widget validation callback allowing positive integers."""
         if P == "" or (P.isdigit() and int(P) > 0): return True
         return False
 
     def add_vline_entry_ui(self):
+        """Add a row of controls for specifying a vertical marker line."""
         if len(self.vline_configs) >= 5: messagebox.showinfo("情報", "縦線マーカーは最大5本までです。", parent=self.master); self.add_vline_button.config(state="disabled"); return
         marker_frame = ttk.Frame(self.vline_entries_container); marker_frame.pack(fill="x", pady=2)
         line_num = len(self.vline_configs) + 1
@@ -1527,6 +1576,7 @@ class BioGraphApp:
         if len(self.vline_configs) >= 5: self.add_vline_button.config(state="disabled")
 
     def remove_vline_entry_ui(self, marker_frame_to_remove):
+        """Remove a vertical marker configuration row from the UI."""
         marker_frame_to_remove.destroy()
         item_to_delete = next((item for item in self.vline_configs if item['widgets_frame'] == marker_frame_to_remove), None)
         if item_to_delete: self.vline_configs.remove(item_to_delete)
@@ -1537,6 +1587,7 @@ class BioGraphApp:
                 first_label_in_row.config(text=f"線{i + 1}:")
 
     def reset_display_settings_inputs(self, state="disabled"):
+        """Reset all display related inputs to default values."""
         self.graph_title_var.set(""); self.x_axis_label_var.set(""); self.y_axis_label_var.set("値")
         self.graph_title_entry.config(state=state); self.x_axis_label_entry.config(state=state); self.y_axis_label_entry.config(state=state)
         self.aspect_ratio_dropdown.config(state=state); self.aspect_ratio_var.set(list(self.aspect_ratios.keys())[0])
@@ -1559,6 +1610,7 @@ class BioGraphApp:
         self.clear_legend_entries_ui()
 
     def clear_legend_entries_ui(self):
+        """Remove all dynamically created legend name entry widgets."""
         for widget in self.y_legend_entries_frame.winfo_children():
             if widget not in [self.y_legend_entries_frame.winfo_children()[0]]:
                 widget.destroy()
@@ -1634,12 +1686,15 @@ class BioGraphApp:
 
 
     def differentiate_selected_y(self):
+        """Add a differentiated series for the currently selected Y column."""
         self._process_data('diff')
 
     def integrate_selected_y(self):
+        """Add an integrated series for the currently selected Y column."""
         self._process_data('integ')
 
     def update_column_lists_ui(self, new_col_name, original_col_name, op_name):
+        """Update listboxes and legend entries after creating a new column."""
         self.column_names = self.df.columns.tolist()
 
         current_x = self.x_axis_var.get()
