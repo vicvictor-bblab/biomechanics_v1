@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
 
 
 import tkinter as tk
@@ -1668,9 +1667,3 @@ if __name__ == '__main__':
     root = tk.Tk()
     app = BioGraphApp(root)
     root.mainloop()
-
-
-# In[ ]:
-
-
-
