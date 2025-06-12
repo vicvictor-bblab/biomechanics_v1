@@ -6,23 +6,17 @@ This repository contains a Tkinter-based GUI application for plotting and analyz
 
 1. Install requirements:
    ```bash
-   pip install pandas matplotlib scipy numpy
-   ```
-   If you want to open Excel files, install `openpyxl` as well:
-   ```bash
-   pip install openpyxl
+   pip install -r requirements.txt
    ```
 2. Run the menu script to choose whether to integrate files or start the GUI:
    ```bash
    python main_menu.py
    ```
 
-m001ow-codex/create-main_menu-module-with-tkinter-dialog
    When you select the integration option you will be prompted for multiple CSV
    or Excel files. The selected files are concatenated and saved as a new CSV
    file.
 
-main
    You can still launch the GUI directly if desired:
    ```bash
    python bio_graph_app.py
