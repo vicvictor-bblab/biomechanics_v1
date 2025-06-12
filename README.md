@@ -17,6 +17,12 @@ This repository contains a Tkinter-based GUI application for plotting and analyz
    python main_menu.py
    ```
 
+m001ow-codex/create-main_menu-module-with-tkinter-dialog
+   When you select the integration option you will be prompted for multiple CSV
+   or Excel files. The selected files are concatenated and saved as a new CSV
+   file.
+
+main
    You can still launch the GUI directly if desired:
    ```bash
    python bio_graph_app.py
