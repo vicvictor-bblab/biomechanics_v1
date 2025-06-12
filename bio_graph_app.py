@@ -32,7 +32,9 @@ try:
             matplotlib.font_manager.fontManager.findfont(font_name, fallback_to_default=False)
             matplotlib.rcParams['font.family'] = font_name
             found_font = True; break
-        except: continue
+        except Exception:
+            # Ignore fonts that are unavailable on the current system
+            continue
     if not found_font: matplotlib.rcParams['font.family'] = 'sans-serif'
     matplotlib.rcParams['axes.unicode_minus'] = False
 except Exception as e:

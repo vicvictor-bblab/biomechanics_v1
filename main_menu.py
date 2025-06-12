@@ -6,6 +6,7 @@ import integrate_files
 
 
 def main():
+    """Prompt the user for file integration or GUI launch."""
     # Create a temporary root window for the dialog
     root = tk.Tk()
     root.withdraw()
