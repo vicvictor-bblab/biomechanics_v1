@@ -25,6 +25,7 @@ This repository contains a Tkinter-based GUI application for plotting and analyz
 To exit the application, use **File → 終了** from the menu bar or close the window. The app now confirms before closing.
 
 Use the "CSVに保存..." button in the data table window to export processed data to a CSV file. If no sliced data is available, you'll be notified instead of saving an empty file.
+Use the "PDFレポート保存..." button in the statistics tab to generate a PDF report with the current graph and calculated statistics.
 
 Presets now store the selected X/Y columns in addition to display settings so that you can easily reapply axis selections.
 
