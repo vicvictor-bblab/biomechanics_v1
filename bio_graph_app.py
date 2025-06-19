@@ -358,6 +358,9 @@ class DataOutputWindow(tk.Toplevel):
         vsb.pack(side="right", fill="y")
         hsb.pack(side="bottom", fill="x")
         self.stats_tree.pack(expand=True, fill="both")
+        export_pdf_btn = ttk.Button(parent_frame, text="PDFレポート保存...",
+                                    command=self.export_pdf_report)
+        export_pdf_btn.pack(pady=5)
         self.populate_statistics_table()
 
 
@@ -447,6 +450,136 @@ class DataOutputWindow(tk.Toplevel):
                 row_values.append(val)
             self.stats_tree.insert("", "end", values=tuple(row_values))
 
+
+    def collect_statistics_dataframe(self):
+        """Return a pandas DataFrame of the currently displayed statistics."""
+        if self.app.sliced_df is None or self.app.sliced_df.empty:
+            return None
+
+        selected_y_cols_original = [self.app.y_axis_listbox.get(i)
+                                     for i in self.app.y_axis_listbox.curselection()]
+        if not selected_y_cols_original:
+            return None
+
+        selected_x_col = self.app.x_axis_var.get()
+        active_stats_display_names = [name for name, var in self.stat_vars.items() if var.get()]
+        if not active_stats_display_names:
+            return None
+
+        columns = ["Y軸データ系列"] + active_stats_display_names
+        rows = []
+        for y_col_original in selected_y_cols_original:
+            y_col_display_name = self.app.legend_label_vars.get(
+                y_col_original, tk.StringVar(value=y_col_original)).get()
+            row_values = [y_col_display_name]
+
+            if y_col_original not in self.app.sliced_df.columns:
+                row_values.extend(["列なし"] * len(active_stats_display_names))
+                rows.append(row_values)
+                continue
+
+            y_series = self.app.sliced_df[y_col_original]
+            if not pd.api.types.is_numeric_dtype(y_series):
+                row_values.extend(["非数値データ"] * len(active_stats_display_names))
+                rows.append(row_values)
+                continue
+
+            y_series_numeric = y_series.dropna()
+            if y_series_numeric.empty:
+                row_values.extend(["NaNのみ"] * len(active_stats_display_names))
+                rows.append(row_values)
+                continue
+
+            for stat_display_name in active_stats_display_names:
+                stat_key = self.stat_items.get(stat_display_name)
+                val = "N/A"
+                try:
+                    if stat_key == "max":
+                        val = f"{y_series_numeric.max():.3f}"
+                    elif stat_key == "min":
+                        val = f"{y_series_numeric.min():.3f}"
+                    elif stat_key == "mean":
+                        val = f"{y_series_numeric.mean():.3f}"
+                    elif stat_key == "std":
+                        val = f"{y_series_numeric.std():.3f}"
+                    elif stat_key == "median":
+                        val = f"{y_series_numeric.median():.3f}"
+                    elif stat_key == "idxmax_x" and selected_x_col and selected_x_col in self.app.sliced_df.columns:
+                        idx_max = y_series_numeric.idxmax()
+                        if pd.notnull(idx_max) and idx_max in self.app.sliced_df.index:
+                            x_at_max = self.app.sliced_df.loc[idx_max, selected_x_col]
+                            val = f"{x_at_max:.3f}" if pd.notnull(x_at_max) and isinstance(x_at_max, (int, float)) else "N/A"
+                    elif stat_key == "idxmin_x" and selected_x_col and selected_x_col in self.app.sliced_df.columns:
+                        idx_min = y_series_numeric.idxmin()
+                        if pd.notnull(idx_min) and idx_min in self.app.sliced_df.index:
+                            x_at_min = self.app.sliced_df.loc[idx_min, selected_x_col]
+                            val = f"{x_at_min:.3f}" if pd.notnull(x_at_min) and isinstance(x_at_min, (int, float)) else "N/A"
+                except Exception as e:
+                    print(f"Error calculating stat {stat_key} for {y_col_original}: {e}")
+                    val = "計算エラー"
+                row_values.append(val)
+            rows.append(row_values)
+
+        return pd.DataFrame(rows, columns=columns)
+
+    def export_pdf_report(self):
+        """Generate a simple PDF report with the graph and statistics table."""
+        if self.app.current_fig is None:
+            messagebox.showwarning("警告", "保存するグラフがありません。", parent=self)
+            return
+
+        file_path = filedialog.asksaveasfilename(
+            title="PDFレポート保存",
+            defaultextension=".pdf",
+            filetypes=(("PDFファイル", "*.pdf"), ("すべてのファイル", "*.*"))
+        )
+        if not file_path:
+            return
+
+        stats_df = self.collect_statistics_dataframe()
+        try:
+            from reportlab.lib.pagesizes import A4
+            from reportlab.lib import utils, colors
+            from reportlab.pdfgen import canvas
+            from reportlab.platypus import Table, TableStyle
+            import io
+            from datetime import datetime
+
+            buf = io.BytesIO()
+            self.app.current_fig.savefig(buf, format="png", bbox_inches="tight", dpi=300)
+            buf.seek(0)
+
+            c = canvas.Canvas(file_path, pagesize=A4)
+            width, height = A4
+
+            c.setFont("Helvetica-Bold", 14)
+            c.drawString(50, height - 50, "解析レポート")
+            c.setFont("Helvetica", 10)
+            c.drawString(50, height - 65, datetime.now().strftime("%Y-%m-%d %H:%M"))
+
+            img = utils.ImageReader(buf)
+            iw, ih = img.getSize()
+            max_w = width - 100
+            scale = max_w / iw if iw > 0 else 1
+            img_h = ih * scale
+            c.drawImage(img, 50, height - 70 - img_h, width=max_w, height=img_h)
+
+            if stats_df is not None and not stats_df.empty:
+                table_data = [stats_df.columns.tolist()] + stats_df.values.tolist()
+                table = Table(table_data, repeatRows=1)
+                style = TableStyle([
+                    ('GRID', (0,0), (-1,-1), 0.5, colors.black),
+                    ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
+                    ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ])
+                table.setStyle(style)
+                table_width, table_height = table.wrap(width - 100, height)
+                table.drawOn(c, 50, 50)
+
+            c.save()
+            messagebox.showinfo("成功", f"レポートを {file_path} に保存しました。", parent=self)
+        except Exception as e:
+            messagebox.showerror("保存失敗", f"PDF保存中にエラーが発生しました:\n{e}", parent=self)
 
 class BioGraphApp:
     def __init__(self, master):
