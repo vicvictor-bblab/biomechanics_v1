@@ -627,9 +627,13 @@ class BioGraphApp:
         self.figure_bg_color_var = tk.StringVar(value="#F0F0F0")
         self.grid_visible_var = tk.BooleanVar(value=True)
         self.grid_color_var = tk.StringVar(value="lightgray")
-        self.grid_linestyle_var = tk.StringVar(value="-") 
+        self.grid_linestyle_var = tk.StringVar(value="-")
         self.grid_linewidth_var = tk.DoubleVar(value=0.8)
         self.global_fontsize_var = tk.IntVar(value=10) # 基本フォントサイズ
+        self.x_min_var = tk.StringVar()
+        self.x_max_var = tk.StringVar()
+        self.y_min_var = tk.StringVar()
+        self.y_max_var = tk.StringVar()
 
 
         main_paned_window = ttk.PanedWindow(master, orient=tk.HORIZONTAL)
@@ -741,6 +745,29 @@ class BioGraphApp:
         vcmd_end = (self.end_row_entry.register(self.validate_numeric_input), '%P')
         self.end_row_entry.config(validate='key', validatecommand=vcmd_end)
         ttk.Label(range_frame, text="(空欄で全範囲)").pack(side=tk.LEFT, padx=5, pady=2)
+
+        axis_range_frame = ttk.LabelFrame(self.scrollable_controls_frame, text="軸表示範囲設定")
+        axis_range_frame.pack(padx=5, pady=5, fill="x")
+        ttk.Label(axis_range_frame, text="X最小:").pack(side=tk.LEFT, padx=5, pady=2)
+        self.x_min_entry = ttk.Entry(axis_range_frame, textvariable=self.x_min_var, width=7)
+        self.x_min_entry.pack(side=tk.LEFT, padx=5, pady=2)
+        vcmd_xmin = (self.x_min_entry.register(self.validate_numeric_input), '%P')
+        self.x_min_entry.config(validate='key', validatecommand=vcmd_xmin)
+        ttk.Label(axis_range_frame, text="X最大:").pack(side=tk.LEFT, padx=5, pady=2)
+        self.x_max_entry = ttk.Entry(axis_range_frame, textvariable=self.x_max_var, width=7)
+        self.x_max_entry.pack(side=tk.LEFT, padx=5, pady=2)
+        vcmd_xmax = (self.x_max_entry.register(self.validate_numeric_input), '%P')
+        self.x_max_entry.config(validate='key', validatecommand=vcmd_xmax)
+        ttk.Label(axis_range_frame, text="Y最小:").pack(side=tk.LEFT, padx=5, pady=2)
+        self.y_min_entry = ttk.Entry(axis_range_frame, textvariable=self.y_min_var, width=7)
+        self.y_min_entry.pack(side=tk.LEFT, padx=5, pady=2)
+        vcmd_ymin = (self.y_min_entry.register(self.validate_numeric_input), '%P')
+        self.y_min_entry.config(validate='key', validatecommand=vcmd_ymin)
+        ttk.Label(axis_range_frame, text="Y最大:").pack(side=tk.LEFT, padx=5, pady=2)
+        self.y_max_entry = ttk.Entry(axis_range_frame, textvariable=self.y_max_var, width=7)
+        self.y_max_entry.pack(side=tk.LEFT, padx=5, pady=2)
+        vcmd_ymax = (self.y_max_entry.register(self.validate_numeric_input), '%P')
+        self.y_max_entry.config(validate='key', validatecommand=vcmd_ymax)
 
         self.marker_outer_frame = ttk.LabelFrame(self.scrollable_controls_frame, text="5. イベントマーカー設定 (最大5本)")
         self.marker_outer_frame.pack(padx=5, pady=5, fill="x")
@@ -967,7 +994,11 @@ class BioGraphApp:
             'grid_color': self.grid_color_var.get(),
             'grid_linestyle': self.grid_linestyle_var.get(),
             'grid_linewidth': self.grid_linewidth_var.get(),
-            'global_fontsize': self.global_fontsize_var.get()
+            'global_fontsize': self.global_fontsize_var.get(),
+            'x_min': self.x_min_var.get(),
+            'x_max': self.x_max_var.get(),
+            'y_min': self.y_min_var.get(),
+            'y_max': self.y_max_var.get()
         }
         return settings
 
@@ -1049,6 +1080,10 @@ class BioGraphApp:
 
         self.start_row_var.set("")
         self.end_row_var.set("")
+        self.x_min_var.set("")
+        self.x_max_var.set("")
+        self.y_min_var.set("")
+        self.y_max_var.set("")
 
         for config_item in self.vline_configs:
             config_item['widgets_frame'].destroy()
@@ -1068,6 +1103,10 @@ class BioGraphApp:
         self.graph_title_var.set(settings_dict.get('graph_title', ""))
         self.x_axis_label_var.set(settings_dict.get('x_axis_label', ""))
         self.y_axis_label_var.set(settings_dict.get('y_axis_label', "値"))
+        self.x_min_var.set(settings_dict.get('x_min', ""))
+        self.x_max_var.set(settings_dict.get('x_max', ""))
+        self.y_min_var.set(settings_dict.get('y_min', ""))
+        self.y_max_var.set(settings_dict.get('y_max', ""))
 
         aspect_ratio_to_set = settings_dict.get('aspect_ratio', list(self.aspect_ratios.keys())[0])
         if aspect_ratio_to_set in self.aspect_ratios:
@@ -1548,6 +1587,20 @@ class BioGraphApp:
                             ax.text(x_coord + text_x_offset, text_y_position, name_val, color=color_val, fontsize=base_fontsize -1, ha='left', va='center') # マーカー名もフォントサイズ適用
                     except ValueError: messagebox.showwarning("警告", f"マーカーのX座標 '{x_val_str}' は数値である必要があります。", parent=self.master)
                     except Exception as e_v: messagebox.showwarning("警告", f"マーカー '{name_val}' の描画中にエラー: {e_v}", parent=self.master)
+
+            x_min_str = self.x_min_var.get().strip(); x_max_str = self.x_max_var.get().strip()
+            y_min_str = self.y_min_var.get().strip(); y_max_str = self.y_max_var.get().strip()
+            try:
+                x_min = float(x_min_str) if x_min_str else None
+                x_max = float(x_max_str) if x_max_str else None
+                y_min = float(y_min_str) if y_min_str else None
+                y_max = float(y_max_str) if y_max_str else None
+                if any(v is not None for v in [x_min, x_max]):
+                    ax.set_xlim(left=x_min, right=x_max)
+                if any(v is not None for v in [y_min, y_max]):
+                    ax.set_ylim(bottom=y_min, top=y_max)
+            except ValueError:
+                messagebox.showwarning("警告", "軸範囲には数値を入力してください。", parent=self.master)
 
             # フォントサイズ適用
             ax.set_title(graph_title, fontsize=base_fontsize + 2)
